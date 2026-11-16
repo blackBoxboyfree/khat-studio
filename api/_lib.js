@@ -22,10 +22,11 @@ const price = () => ({
   amount: parseInt(process.env.PRICE_CENTS || '260', 10),
   currency: (process.env.CURRENCY || 'usd').toLowerCase(),
 });
+const paymentsOn = () => process.env.PAYMENTS_ENABLED === '1';
 const origin = (req) => `https://${req.headers['x-forwarded-host'] || req.headers.host}`;
 const readBody = async (req) => {
   if (req.body && typeof req.body === 'object') return req.body;
   let s = ''; for await (const c of req) s += c;
   try { return JSON.parse(s || '{}'); } catch { return {}; }
 };
-module.exports = { stripe, price, origin, readBody };
+module.exports = { stripe, price, origin, readBody, paymentsOn };

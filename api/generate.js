@@ -1,4 +1,5 @@
-const { stripe, origin, readBody } = require('./_lib');
+const { stripe, origin, readBody, paymentsOn } = require('./_lib');
+const last = new Map();
 const MODELS = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'].filter(Boolean);
 
 function prompt(text) {
@@ -40,23 +41,37 @@ module.exports = async (req, res) => {
   let piId = null;
   try {
     const b = await readBody(req);
-    const sid = String(b.session_id || '');
-    if (!/^cs_[A-Za-z0-9_]+$/.test(sid)) return res.status(400).json({ error: 'bad_session' });
-    const s = await stripe('GET', `/checkout/sessions/${sid}?expand[]=payment_intent`);
-    if (s.payment_status !== 'paid') return res.status(402).json({ error: 'not_paid' });
-    const pi = s.payment_intent;
-    piId = pi.id;
-    const md = pi.metadata || {};
-    if (md.used === '1') return res.status(409).json({ error: 'already_used' });
-    if (md.lock && Date.now() - Number(md.lock) < 90000) return res.status(409).json({ error: 'busy' });
-    const n = parseInt(s.metadata.design, 10), text = s.metadata.text;
-    if (!(n >= 1 && n <= 88) || !text) return res.status(400).json({ error: 'bad_order' });
-    await stripe('POST', `/payment_intents/${piId}`, { metadata: { lock: String(Date.now()) } });
+    let n, text;
+    if (!paymentsOn()) {
+      // free mode (payments disabled): simple per-IP throttle, best effort
+      const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x';
+      const t = Date.now();
+      if (t - (last.get(ip) || 0) < 20000) return res.status(429).json({ error: 'slow_down' });
+      last.set(ip, t);
+      if (last.size > 500) last.clear();
+      n = parseInt(b.design, 10);
+      text = String(b.text || '').trim().replace(/\s+/g, ' ');
+      if (!(n >= 1 && n <= 88)) return res.status(400).json({ error: 'bad_design' });
+      if (text.length < 1 || text.length > 60) return res.status(400).json({ error: 'bad_text' });
+    } else {
+      const sid = String(b.session_id || '');
+      if (!/^cs_[A-Za-z0-9_]+$/.test(sid)) return res.status(400).json({ error: 'bad_session' });
+      const s = await stripe('GET', `/checkout/sessions/${sid}?expand[]=payment_intent`);
+      if (s.payment_status !== 'paid') return res.status(402).json({ error: 'not_paid' });
+      const pi = s.payment_intent;
+      piId = pi.id;
+      const md = pi.metadata || {};
+      if (md.used === '1') return res.status(409).json({ error: 'already_used' });
+      if (md.lock && Date.now() - Number(md.lock) < 90000) return res.status(409).json({ error: 'busy' });
+      n = parseInt(s.metadata.design, 10); text = s.metadata.text;
+      if (!(n >= 1 && n <= 88) || !text) return res.status(400).json({ error: 'bad_order' });
+      await stripe('POST', `/payment_intents/${piId}`, { metadata: { lock: String(Date.now()) } });
+    }
     const ref = await fetch(`${origin(req)}/img/${String(n).padStart(3, '0')}.jpg`);
     if (!ref.ok) throw Object.assign(new Error('ref_missing'), { status: 500 });
     const refB64 = Buffer.from(await ref.arrayBuffer()).toString('base64');
     const out = await gemini(refB64, text);
-    await stripe('POST', `/payment_intents/${piId}`, { metadata: { used: '1', lock: '' } });
+    if (piId) await stripe('POST', `/payment_intents/${piId}`, { metadata: { used: '1', lock: '' } });
     res.setHeader('Cache-Control', 'no-store');
     res.json({ mime: out.mime, data: out.data, design: n, text });
   } catch (e) {

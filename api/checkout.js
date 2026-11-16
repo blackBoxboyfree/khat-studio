@@ -1,6 +1,7 @@
-const { stripe, price, origin, readBody } = require('./_lib');
+const { stripe, price, origin, readBody, paymentsOn } = require('./_lib');
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+  if (!paymentsOn()) return res.status(403).json({ error: 'payments_disabled' });
   try {
     const b = await readBody(req);
     const n = parseInt(b.design, 10);

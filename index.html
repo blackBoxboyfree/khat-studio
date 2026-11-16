@@ -106,7 +106,7 @@ const D=[{"n":1,"f":"img/001.jpg","k":"full"},{"n":2,"f":"img/002.jpg","k":"full
 const KIND={partial:"مقصوص",mine:"تصميمي"};
 const $=id=>document.getElementById(id);
 const toast=t=>{const e=$("toast");e.textContent=t;e.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove("on"),3000)};
-let pick=null,filter="all",cfg={amount:100,currency:"usd",ready:true};
+let pick=null,filter="all",cfg={amount:260,currency:"usd",ready:true,payments:false};
 const money=()=>{try{return new Intl.NumberFormat("ar",{style:"currency",currency:cfg.currency.toUpperCase()}).format(cfg.amount/100)}catch(e){return (cfg.amount/100)+" "+cfg.currency.toUpperCase()}};
 const tick='<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
@@ -132,7 +132,7 @@ function upd(){
   $("len").textContent=$("txt").value.length;
   const ok=t&&pick&&cfg.ready;
   $("pay").disabled=!ok;
-  $("pay").textContent="ادفع "+money()+" وصمّم";
+  $("pay").textContent=cfg.payments?"ادفع "+money()+" وصمّم":"صمّم الآن";
   $("info").innerHTML=!cfg.ready?"<b>الخدمة غير مفعّلة بعد</b>":(!t?"اكتب النص أولاً":(!pick?"<b>اختر تصميماً</b>":`<b>التصميم رقم ${pick}</b> · «${t.length>18?t.slice(0,18)+"…":t}»`));
   if($("lb").classList.contains("open"))lbUpd();
 }
@@ -160,6 +160,7 @@ $("lbX").onclick=closeLb;
 $("lbPick").onclick=()=>{pick=cur;upd();closeLb()};
 
 $("pay").onclick=async()=>{
+  if(!cfg.payments){runGenerate({design:pick,text:$("txt").value.trim()});return}
   const btn=$("pay");btn.disabled=true;btn.textContent="جارٍ التحويل للدفع…";
   try{
     const r=await fetch("/api/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({design:pick,text:$("txt").value.trim()})});
@@ -170,24 +171,25 @@ $("pay").onclick=async()=>{
 };
 
 /* result view after payment */
-const ERR={already_used:"تم توليد هذا الطلب سابقاً ولا يمكن إعادته.",busy:"الطلب قيد التنفيذ، انتظر قليلاً ثم أعد المحاولة.",not_paid:"لم يكتمل الدفع.",not_configured:"الخدمة غير مفعّلة بعد."};
+const ERR={slow_down:"انتظر عدة ثوانٍ ثم أعد المحاولة.",already_used:"تم توليد هذا الطلب سابقاً ولا يمكن إعادته.",busy:"الطلب قيد التنفيذ، انتظر قليلاً ثم أعد المحاولة.",not_paid:"لم يكتمل الدفع.",not_configured:"الخدمة غير مفعّلة بعد."};
 function showRes(html){$("resIn").innerHTML=html;$("res").classList.add("open");document.body.style.overflow="hidden"}
-async function runGenerate(sid){
-  showRes('<div class="spin"></div><h2>جارٍ تصميم نصك…</h2><p>تم الدفع بنجاح. قد يستغرق التوليد نحو نصف دقيقة، لا تغلق الصفحة.</p>');
+async function runGenerate(arg){
+  const body=typeof arg=="string"?{session_id:arg}:arg;
+  showRes('<div class="spin"></div><h2>جارٍ تصميم نصك…</h2><p>قد يستغرق التوليد نحو نصف دقيقة، لا تغلق الصفحة.</p>');
   try{
-    const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({session_id:sid})});
+    const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||"error");
     const src="data:"+j.mime+";base64,"+j.data;
     const ext=j.mime.includes("jpeg")?"jpg":"png";
-    showRes(`<h2>تم التصميم ✓</h2><img src="${src}" alt="التصميم"><p style="margin:14px 0 4px">احفظ التصميم الآن، لا يمكن توليده مرة أخرى بنفس الدفع.</p>
+    showRes(`<h2>تم التصميم ✓</h2><img src="${src}" alt="التصميم"><p style="margin:14px 0 4px">احفظ التصميم الآن.</p>
       <a class="b p" href="${src}" download="design-${j.design}-${Date.now()}.${ext}">تنزيل الصورة</a>
       <button class="b s" onclick="location.href='/'">تصميم جديد</button>`);
   }catch(e){
-    const m=ERR[e.message]||"تعذّر توليد التصميم. لم يُستهلك دفعك، أعد المحاولة.";
+    const m=ERR[e.message]||"تعذّر توليد التصميم. أعد المحاولة.";
     const retry=(e.message=="already_used"||e.message=="not_paid")?"":`<button class="b p" id="retry">إعادة المحاولة</button>`;
     showRes(`<h2>لم يكتمل التصميم</h2><p>${m}</p>${retry}<button class="b s" onclick="location.href='/'">الرئيسية</button>`);
-    const rb=document.getElementById("retry");if(rb)rb.onclick=()=>runGenerate(sid);
+    const rb=document.getElementById("retry");if(rb)rb.onclick=()=>runGenerate(arg);
   }
 }
 const qs=new URLSearchParams(location.search);
