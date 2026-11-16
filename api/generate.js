@@ -34,6 +34,32 @@ async function gemini(refB64, text) {
   throw Object.assign(new Error(last), { status: 502 });
 }
 
+// ask a cheap text model whether the result really shows the phrase and no app UI
+async function check(img, text) {
+  try {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+      method: 'POST',
+      headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [
+        { text: `Look at this image. Does the main Arabic calligraphy read exactly «${text}» (same words, correct spelling), AND the image has no crown icon, no volume slider, no three-dots button and no name label bar? Answer only YES or NO.` },
+        { inlineData: { mimeType: img.mime, data: img.data } }] }] }),
+    });
+    const j = await r.json();
+    const a = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim().toUpperCase();
+    return !a.startsWith('NO');
+  } catch { return true; }
+}
+
+async function generate(refB64, text) {
+  let out;
+  for (let i = 0; i < 3; i++) {
+    out = await gemini(refB64, text);
+    if (await check(out, text)) return out;
+    console.warn('check failed, retry', i + 1);
+  }
+  return out;
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
   let piId = null, ipKey = '';
@@ -68,7 +94,7 @@ module.exports = async (req, res) => {
     const ref = await fetch(`${origin(req)}/img/${String(n).padStart(3, '0')}.jpg`);
     if (!ref.ok) throw Object.assign(new Error('ref_missing'), { status: 500 });
     const refB64 = Buffer.from(await ref.arrayBuffer()).toString('base64');
-    const out = await gemini(refB64, text);
+    const out = await generate(refB64, text);
     if (piId) await stripe('POST', `/payment_intents/${piId}`, { metadata: { used: '1', lock: '' } });
     res.setHeader('Cache-Control', 'no-store');
     res.json({ mime: out.mime, data: out.data, design: n, text });
