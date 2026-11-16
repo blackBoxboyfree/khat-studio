@@ -3,14 +3,17 @@ const last = new Map();
 const MODELS = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'].filter(Boolean);
 
 function prompt(text) {
-  return `The attached image is a STYLE REFERENCE: an Arabic calligraphy / lettering design.
-Create a NEW square image in exactly the same visual style: the same lettering style, materials, textures, colors, lighting, decorative elements, background and composition.
-The ONLY text written in the new image must be exactly this Arabic/Latin text: «${text}»
+  const letters = [...text.replace(/\s+/g, ' ')].join(' ');
+  return `You are redesigning a calligraphy image with NEW wording.
+The attached image shows a calligraphy design. Its current words are WRONG for this job and must NOT appear in your result.
+Produce a NEW square image that copies only the STYLE of the attached image: lettering style, colors, materials, textures, lighting, decorative elements, background and composition.
+Write exactly this text, and nothing else, as the calligraphy: «${text}»
+(letters, for accuracy: ${letters})
 Rules:
-- Spell the text exactly as given, with correct Arabic letter shaping and connections, right-to-left.
-- Do NOT reuse the words that appear in the reference image.
-- Do NOT draw any crown icon, name label, caption bar, watermark or app interface.
-- Fill the frame similar to the reference. No other text.`;
+- The words written in the attached image must be completely replaced by «${text}». Do not copy, keep or partly reuse any of the original words or letters.
+- Spell «${text}» exactly, right-to-left, with correct Arabic letter shaping and connections. Keep the same words in the same order; add, remove or change nothing.
+- No crown icon, name label, caption bar, watermark, app interface or any other text.
+- Fill the frame similar to the reference.`;
 }
 
 async function gemini(refB64, text) {
