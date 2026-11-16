@@ -1,10 +1,14 @@
 const { stripe, origin, readBody, paymentsOn } = require('./_lib');
 const last = new Map();
-const MODELS = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'].filter(Boolean);
+const MODELS = [process.env.GEMINI_MODEL, 'gemini-3-pro-image-preview', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'].filter(Boolean);
 
 function prompt(text) {
-  return `صمم لي نفس هذا التصميم بالضبط (نفس الأسلوب والألوان والزخارف والخلفية) لكن بالعبارة التالية: «${text}»
-Design the same design as the attached image, but with this phrase: «${text}»`;
+  return `الصورة المرفقة مرجع للأسلوب فقط. صمم صورة جديدة تماماً (مربعة) بنفس أسلوب الخط والألوان والخامة والإضاءة والزخارف والخلفية والتكوين، لكن بالعبارة التالية فقط: «${text}»
+شروط مهمة:
+- الكلمات الموجودة في الصورة المرفقة ممنوع تظهر نهائياً، استبدلها كلياً بالعبارة «${text}» مكتوبة بإملاء عربي صحيح وحروف متصلة من اليمين لليسار.
+- لا تنسخ الصورة المرفقة ولا تعدّل عليها، أنشئ صورة جديدة.
+- لا تضع أي عناصر واجهة تطبيق: لا تاج، لا مؤشر صوت، لا نقاط، لا شريط اسم أو أي كتابة أخرى.
+Create a NEW image in the exact same style as the attached reference, but the calligraphy must read only: «${text}». Do not copy the reference or keep its words. No app UI elements (no crown, volume slider, dots, name bar) and no other text.`;
 }
 
 async function gemini(refB64, text) {
