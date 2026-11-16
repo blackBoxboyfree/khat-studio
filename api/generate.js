@@ -38,7 +38,7 @@ async function gemini(refB64, text) {
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
-  let piId = null;
+  let piId = null, ipKey = '';
   try {
     const b = await readBody(req);
     let n, text;
@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
       const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x';
       const t = Date.now();
       if (t - (last.get(ip) || 0) < 20000) return res.status(429).json({ error: 'slow_down' });
-      last.set(ip, t);
+      last.set(ip, t); ipKey = ip;
       if (last.size > 500) last.clear();
       n = parseInt(b.design, 10);
       text = String(b.text || '').trim().replace(/\s+/g, ' ');
@@ -75,6 +75,8 @@ module.exports = async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ mime: out.mime, data: out.data, design: n, text });
   } catch (e) {
+    if (ipKey) last.delete(ipKey);
+    console.error('generate failed', e.status, e.message);
     if (piId) { try { await stripe('POST', `/payment_intents/${piId}`, { metadata: { lock: '' } }); } catch {} }
     res.status(e.status || 500).json({ error: e.message });
   }
