@@ -3,17 +3,8 @@ const last = new Map();
 const MODELS = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'].filter(Boolean);
 
 function prompt(text) {
-  const letters = [...text.replace(/\s+/g, ' ')].join(' ');
-  return `You are redesigning a calligraphy image with NEW wording.
-The attached image shows a calligraphy design. Its current words are WRONG for this job and must NOT appear in your result.
-Produce a NEW square image that copies only the STYLE of the attached image: lettering style, colors, materials, textures, lighting, decorative elements, background and composition.
-Write exactly this text, and nothing else, as the calligraphy: «${text}»
-(letters, for accuracy: ${letters})
-Rules:
-- The words written in the attached image must be completely replaced by «${text}». Do not copy, keep or partly reuse any of the original words or letters.
-- Spell «${text}» exactly, right-to-left, with correct Arabic letter shaping and connections. Keep the same words in the same order; add, remove or change nothing.
-- No crown icon, name label, caption bar, watermark, app interface or any other text.
-- Fill the frame similar to the reference.`;
+  return `صمم لي نفس هذا التصميم بالضبط (نفس الأسلوب والألوان والزخارف والخلفية) لكن بالعبارة التالية: «${text}»
+Design the same design as the attached image, but with this phrase: «${text}»`;
 }
 
 async function gemini(refB64, text) {
